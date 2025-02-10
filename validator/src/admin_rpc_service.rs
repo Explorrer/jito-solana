@@ -257,6 +257,14 @@ pub trait AdminRpc {
         trust_packets: bool,
     ) -> Result<()>;
 
+    #[rpc(meta, name = "setSecondBlockEngineConfig")]
+    fn set_second_block_engine_config(
+        &self,
+        meta: Self::Metadata,
+        block_engine_url: String,
+        trust_packets: bool,
+    ) -> Result<()>;
+
     #[rpc(meta, name = "setRelayerConfig")]
     fn set_relayer_config(
         &self,
@@ -499,6 +507,30 @@ impl AdminRpc for AdminRpcImpl {
         } else {
             Err(jsonrpc_core::error::Error::invalid_params(
                 "failed to set block engine config. see logs for details.",
+            ))
+        }
+    }
+
+    fn set_second_block_engine_config(
+        &self,
+        meta: Self::Metadata,
+        block_engine_url: String,
+        trust_packets: bool,
+    ) -> Result<()> {
+        debug!("set_second_block_engine_config request received");
+        let config = BlockEngineConfig {
+            block_engine_url,
+            trust_packets,
+        };
+        // Detailed log messages are printed inside validate function
+        if BlockEngineStage::is_valid_block_engine_config(&config) {
+            meta.with_post_init(|post_init| {
+                *post_init.second_block_engine_config.lock().unwrap() = config;
+                Ok(())
+            })
+        } else {
+            Err(jsonrpc_core::error::Error::invalid_params(
+                "failed to set second block engine config. see logs for details.",
             ))
         }
     }
@@ -1061,6 +1093,7 @@ mod tests {
             let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
             let repair_whitelist = Arc::new(RwLock::new(HashSet::new()));
             let block_engine_config = Arc::new(Mutex::new(BlockEngineConfig::default()));
+            let second_block_engine_config = Arc::new(Mutex::new(BlockEngineConfig::default()));
             let relayer_config = Arc::new(Mutex::new(RelayerConfig::default()));
             let shred_receiver_address = Arc::new(RwLock::new(None));
             let shred_retransmit_receiver_address = Arc::new(RwLock::new(None));
@@ -1085,6 +1118,7 @@ mod tests {
                         solana_core::cluster_slots_service::cluster_slots::ClusterSlots::default(),
                     ),
                     block_engine_config,
+                    second_block_engine_config,
                     relayer_config,
                     shred_receiver_address,
                     shred_retransmit_receiver_address,

@@ -92,6 +92,7 @@ pub struct Tpu {
     tracer_thread_hdl: TracerThread,
     relayer_stage: RelayerStage,
     block_engine_stage: BlockEngineStage,
+    second_block_engine_stage: BlockEngineStage,
     fetch_stage_manager: FetchStageManager,
     bundle_stage: BundleStage,
 }
@@ -135,6 +136,7 @@ impl Tpu {
         enable_block_production_forwarding: bool,
         _generator_config: Option<GeneratorConfig>, /* vestigial code for replay invalidator */
         block_engine_config: Arc<Mutex<BlockEngineConfig>>,
+        second_block_engine_config: Arc<Mutex<BlockEngineConfig>>,
         relayer_config: Arc<Mutex<RelayerConfig>>,
         tip_manager_config: TipManagerConfig,
         shred_receiver_address: Arc<RwLock<Option<SocketAddr>>>,
@@ -253,6 +255,16 @@ impl Tpu {
         let (bundle_sender, bundle_receiver) = unbounded();
         let block_engine_stage = BlockEngineStage::new(
             block_engine_config,
+            bundle_sender.clone(),
+            cluster_info.clone(),
+            packet_sender.clone(),
+            non_vote_sender.clone(),
+            exit.clone(),
+            &block_builder_fee_info,
+        );
+
+        let second_block_engine_stage = BlockEngineStage::new(
+            second_block_engine_config,
             bundle_sender,
             cluster_info.clone(),
             packet_sender.clone(),
@@ -375,6 +387,7 @@ impl Tpu {
                 staked_nodes_updater_service,
                 tracer_thread_hdl,
                 block_engine_stage,
+                second_block_engine_stage,
                 relayer_stage,
                 fetch_stage_manager,
                 bundle_stage,
@@ -396,6 +409,7 @@ impl Tpu {
             self.bundle_stage.join(),
             self.relayer_stage.join(),
             self.block_engine_stage.join(),
+            self.second_block_engine_stage.join(),
             self.fetch_stage_manager.join(),
         ];
         let broadcast_result = self.broadcast_stage.join();
